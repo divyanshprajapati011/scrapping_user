@@ -193,12 +193,12 @@ def topbar():
     with cols[0]:
         if st.button("🏠 Home"):
             go_to("home")
-    with cols[1]:
-        if st.button("🔑 Login"):
-            go_to("login")
-    with cols[2]:
-        if st.button("📝 Signup"):
-            go_to("signup")
+    # with cols[1]:
+    #     if st.button("🔑 Login"):
+    #         go_to("login")
+    # with cols[2]:
+    #     if st.button("📝 Signup"):
+    #         go_to("signup")
     with cols[3]:
         if st.session_state.logged_in and st.session_state.user:
             u = st.session_state.user["username"]
@@ -303,3 +303,4 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
