@@ -228,15 +228,17 @@ def page_login():
     st.title("Login 🔑")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
+    
     if st.button("Login"):
         user = login_user(username, password)
         if user:
             st.session_state.logged_in = True
             st.session_state.user = user
-            st.success("Login successful! Redirecting to Scraper...")
-            go_to("scraper")
+            st.session_state.page = "scraper"   # direct scraper me bhej do
+            st.experimental_rerun()            # 🔑 force rerun so that scraper page load ho
         else:
             st.error("Invalid credentials")
+
     st.button("⬅️ Back", on_click=lambda: go_to("home"))
 
 def page_signup():
@@ -303,4 +305,5 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
