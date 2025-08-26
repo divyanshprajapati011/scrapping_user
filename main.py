@@ -145,7 +145,7 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 continue
             last_name = name
 
-            website, address, phone, rating = "", "", "", ""
+            website, address, phone, rating, reviews = "", "", "", "", ""
             try:
                 if page.locator('//a[@data-item-id="authority"]').count():
                     website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=1000) or ""
@@ -153,11 +153,20 @@ def scrape_maps(url, limit=100, email_lookup=True):
                     address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=1000)
                 if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
                     phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=1000)
+
+                # ⭐ Rating
                 el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
                 if el.count():
                     aria = el.get_attribute("aria-label", timeout=1000) or ""
                     r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
                     rating = r1.group(1) if r1 else ""
+
+                # 📝 Review count
+                rev_el = page.locator('//span[contains(text(),"review")]')
+                if rev_el.count():
+                    txt = rev_el.nth(0).inner_text(timeout=1000)
+                    r2 = re.search(r"(\d[\d,]*)", txt)
+                    reviews = r2.group(1).replace(",", "") if r2 else ""
             except Exception:
                 pass
 
@@ -173,6 +182,7 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 "Email (from site)": email_from_site,
                 "Extra Phones (from site)": extra_phones_from_site,
                 "Rating": rating,
+                "Review Count": reviews,
                 "Source (Maps URL)": page.url
             })
             count += 1
@@ -180,6 +190,7 @@ def scrape_maps(url, limit=100, email_lookup=True):
         context.close()
         browser.close()
     return pd.DataFrame(rows)
+
 
 # ================== DOWNLOAD HELPERS ==================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -309,6 +320,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
