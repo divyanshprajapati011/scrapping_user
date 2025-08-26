@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import hashlib, io, time, urllib.parse, re, requests, os, subprocess, sys
 from playwright.sync_api import sync_playwright
+import time
 
 # ================== APP CONFIG ==================
 st.set_page_config(page_title="Maps Scraper + Auth Flow", layout="wide")
@@ -234,8 +235,10 @@ def page_login():
         if user:
             st.session_state.logged_in = True
             st.session_state.user = user
-            st.session_state.page = "scraper"   # direct scraper me bhej do
-            st.experimental_rerun()            # 🔑 force rerun so that scraper page load ho
+            st.success("✅ Login successful! Redirecting to Scraper...")
+            st.session_state.page = "scraper"
+            time.sleep(1.5)           # 1.5 second wait
+            st.experimental_rerun()   # फिर Scraper page पर rerun
         else:
             st.error("Invalid credentials")
 
@@ -305,5 +308,6 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
