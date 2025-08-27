@@ -248,9 +248,10 @@ def page_login():
             st.session_state.logged_in = True
             st.session_state.user = user
             st.success("✅ Login successful! Redirecting to Scraper...")
-            st.session_state.page = scraper
-            time.sleep(0)           # 0 second wait
-            st.experimental_rerun()   # फिर Scraper page पर rerun
+            go_to("scraper")
+            # st.session_state.page = scraper
+            # time.sleep(0)           # 0 second wait
+            # st.experimental_rerun()   # फिर Scraper page पर rerun
         else:
             st.error("Invalid credentials")
 
@@ -320,6 +321,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
