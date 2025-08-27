@@ -270,7 +270,7 @@ def page_signup():
                 st.error("User already exists or DB error.")
         else:
             st.warning("Please fill all fields.")
-    st.button("⬅️ login ", on_click=lambda: go_to("Login"))
+    st.button("⬅️ login ",on_click=lambda: go_to("login"))
 
 def page_scraper():
     if not st.session_state.logged_in or not st.session_state.user:
@@ -320,6 +320,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
