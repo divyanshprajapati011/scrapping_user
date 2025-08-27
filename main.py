@@ -254,7 +254,7 @@ def page_login():
         else:
             st.error("Invalid credentials")
 
-    st.button("⬅️ Back", on_click=lambda: go_to("home"))
+    st.button(""➡️ Open Scraper"", on_click=lambda: go_to("scraper"))
 
 def page_signup():
     st.title("Signup 📝")
@@ -270,7 +270,7 @@ def page_signup():
                 st.error("User already exists or DB error.")
         else:
             st.warning("Please fill all fields.")
-    st.button("⬅️ Back", on_click=lambda: go_to("home"))
+    st.button("⬅️ login ", on_click=lambda: go_to("Login"))
 
 def page_scraper():
     if not st.session_state.logged_in or not st.session_state.user:
@@ -320,6 +320,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
