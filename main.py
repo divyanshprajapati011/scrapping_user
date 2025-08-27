@@ -232,10 +232,10 @@ def page_home():
     with c2:
         if st.button("📝 Create Account", use_container_width=True):
             go_to("signup")
-    if st.session_state.logged_in:
-        st.success("You are already logged in.")
-        if st.button("➡️ Open Scraper", use_container_width=True):
-            go_to("scraper")
+    # if st.session_state.logged_in:
+    #     st.success("You are already logged in.")
+    #     if st.button("➡️ Open Scraper", use_container_width=True):
+    #         go_to("scraper")
 
 def page_login():
     st.title("Login 🔑")
@@ -275,11 +275,11 @@ def page_signup():
     st.button("⬅️ login ",on_click=lambda: go_to("login"))
 
 def page_scraper():
-    if not st.session_state.logged_in or not st.session_state.user:
-        st.error("Please login first")
-        if st.button("Go to Login"):
-            go_to("login")
-        return
+    # if not st.session_state.logged_in or not st.session_state.user:
+    #     st.error("Please login first")
+    #     if st.button("Go to Login"):
+    #         go_to("login")
+        # return
     st.title("🚀 Google Maps Scraper")
     user_input = st.text_input("🔎 Enter query OR Google Search URL OR Google Maps URL", "top coaching in Bhopal")
     max_results = st.number_input("Maximum results to fetch", min_value=5, max_value=500, value=60, step=5)
@@ -322,6 +322,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
