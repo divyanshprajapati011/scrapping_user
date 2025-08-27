@@ -248,7 +248,8 @@ def page_login():
             st.session_state.logged_in = True
             st.session_state.user = user
             st.success("✅ Login successful! Redirecting to Scraper...")
-            go_to("scraper")
+            if st.button("➡️ Open Scraper", use_container_width=True):
+                go_to("scraper")
             # st.session_state.page = "scraper"
             # time.sleep(0)           # 0 second wait
             # st.experimental_rerun()   # फिर Scraper page पर rerun
@@ -321,6 +322,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
