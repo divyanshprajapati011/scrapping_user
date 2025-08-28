@@ -82,7 +82,7 @@ def extract_email_phone(website_url):
 
 
 def scrape_maps(query, limit=50, lookup=True):
-    """SerpAPI से Google Maps scraping + Pagination + Progress + ETA (Fixed Loop)"""
+    """SerpAPI से Google Maps scraping + Proper Pagination + Retry"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -106,16 +106,13 @@ def scrape_maps(query, limit=50, lookup=True):
 
         local_results = data.get("local_results", [])
         if not local_results:
-            # अगर result खाली है → wait & retry
-            time.sleep(3)
-            continue
+            break  # no more results
 
         for r in local_results:
             if fetched >= limit:
                 break
 
             t0 = time.time()
-
             email, phone_site = "", ""
             if lookup and r.get("website"):
                 email, phone_site = extract_email_phone(r["website"])
@@ -137,7 +134,7 @@ def scrape_maps(query, limit=50, lookup=True):
             t1 = time.time()
             times.append(t1 - t0)
 
-            # ETA calculation
+            # ETA calc
             avg_time = sum(times) / len(times)
             remaining = limit - fetched
             eta_sec = int(avg_time * remaining)
@@ -147,20 +144,30 @@ def scrape_maps(query, limit=50, lookup=True):
                 f"Scraping {fetched}/{limit} businesses (Page {page})... ⏳ ETA: {eta_sec}s"
             )
 
-        # Pagination (next page token check)
+        # Pagination handling
         next_page_token = data.get("serpapi_pagination", {}).get("next_page_token")
         if not next_page_token or fetched >= limit:
             break
 
-        # 🔑 IMPORTANT → 5 sec wait (SerpAPI requirement)
-        time.sleep(5)
+        # 👉 wait + retry until token works
+        success = False
+        for _ in range(10):  # max 10 retries
+            time.sleep(5)  # token needs ~5s
+            params = {
+                "engine": "google_maps",
+                "type": "search",
+                "api_key": SERPAPI_KEY,
+                "next_page_token": next_page_token
+            }
+            res = requests.get(url, params=params)
+            data = res.json()
+            if data.get("local_results"):
+                success = True
+                break
+        if not success:
+            st.warning("⚠️ Could not fetch next page, stopping early.")
+            break
 
-        params = {
-            "engine": "google_maps",
-            "type": "search",
-            "api_key": SERPAPI_KEY,
-            "next_page_token": next_page_token
-        }
         page += 1
 
     progress.empty()
@@ -282,6 +289,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
