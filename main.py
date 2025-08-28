@@ -112,9 +112,9 @@ def fetch_email_phone_from_site(url, timeout=12):
         return "", ""
 
 # ================== SCRAPER FUNCTION ==================
-def scrape_maps(url, limit=200, email_lookup=True):
+def scrape_maps(url, limit=100, email_lookup=True):
     rows = []
-    seen = set()   # duplicate prevention (name+website)
+    seen = set()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -124,19 +124,20 @@ def scrape_maps(url, limit=200, email_lookup=True):
         context = browser.new_context()
         page = context.new_page()
 
-        # ✅ Increase timeout & wait properly
+        # ✅ Longer wait
         page.goto(url, timeout=120_000, wait_until="networkidle")
         time.sleep(5)
 
-        # ✅ Keep scrolling until enough results loaded
-        last_height = 0
-        while len(page.locator("//div[contains(@class,'Nv2PK')]").all()) < limit:
-            page.mouse.wheel(0, 2000)
-            page.wait_for_timeout(2000)
-            new_height = page.evaluate("document.body.scrollHeight")
-            if new_height == last_height:
+        # ✅ Infinite scroll until enough results
+        while True:
+            cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
+            if len(cards) >= limit:
                 break
-            last_height = new_height
+            page.mouse.wheel(0, 2500)
+            page.wait_for_timeout(2500)
+            # stop if no new cards load
+            if len(cards) >= limit or len(cards) > 200:  # safety
+                break
 
         cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
         count = 0
@@ -144,21 +145,22 @@ def scrape_maps(url, limit=200, email_lookup=True):
         for card in cards:
             if limit and count >= limit:
                 break
+
             try:
                 card.scroll_into_view_if_needed()
                 card.click()
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(1800)
             except Exception:
                 continue
 
-            # Business Name
+            # Name
             try:
                 name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
             except Exception:
                 continue
 
-            # Website, Address, Phone, Rating, Reviews
             website, address, phone, rating, reviews = "", "", "", "", ""
+
             try:
                 if page.locator('//a[@data-item-id="authority"]').count():
                     website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=2000) or ""
@@ -167,27 +169,31 @@ def scrape_maps(url, limit=200, email_lookup=True):
                 if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
                     phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=2000)
 
-                el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
-                if el.count():
-                    aria = el.get_attribute("aria-label", timeout=2000) or ""
+                # ✅ Rating (fallback locators)
+                if page.locator('//span[@role="img"][contains(@aria-label,"stars")]').count():
+                    aria = page.locator('//span[@role="img"][contains(@aria-label,"stars")]').get_attribute("aria-label", timeout=2000) or ""
                     r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
                     rating = r1.group(1) if r1 else ""
+                elif page.locator('//span[contains(@aria-label,"stars")]').count():
+                    txt = page.locator('//span[contains(@aria-label,"stars")]').nth(0).get_attribute("aria-label", timeout=2000) or ""
+                    r1 = re.search(r"(\d+(?:\.\d+)?)", txt)
+                    rating = r1.group(1) if r1 else ""
 
-                rev_el = page.locator('//span[contains(text(),"review")]')
-                if rev_el.count():
-                    txt = rev_el.nth(0).inner_text(timeout=2000)
+                # ✅ Reviews (fallback)
+                if page.locator('//span[contains(text(),"review")]').count():
+                    txt = page.locator('//span[contains(text(),"review")]').nth(0).inner_text(timeout=2000)
                     r2 = re.search(r"(\d[\d,]*)", txt)
                     reviews = r2.group(1).replace(",", "") if r2 else ""
             except Exception:
                 pass
 
-            # ✅ Check duplicate (name+website)
+            # Duplicate check
             key = (name.strip(), website.strip())
             if key in seen:
                 continue
             seen.add(key)
 
-            # Email & Extra Phones from website
+            # Email + extra phones from website
             email_from_site, extra_phones_from_site = ("", "")
             if email_lookup and website:
                 email_from_site, extra_phones_from_site = fetch_email_phone_from_site(website)
@@ -207,7 +213,6 @@ def scrape_maps(url, limit=200, email_lookup=True):
         browser.close()
 
     return pd.DataFrame(rows)
-
 
 
 # ================== DOWNLOAD HELPERS ==================
@@ -338,6 +343,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
