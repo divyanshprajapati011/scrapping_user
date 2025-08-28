@@ -5,7 +5,7 @@ from psycopg2.extras import RealDictCursor
 import hashlib, io, requests, re
 
 # ================== APP CONFIG ==================
-st.set_page_config(page_title="Maps Scraper (SerpAPI)", layout="wide")
+st.set_page_config(page_title="Maps Scraper )", layout="wide")
 
 # ================== SESSION ROUTER ==================
 if "page" not in st.session_state:
@@ -80,7 +80,7 @@ def extract_email_phone(website_url):
         return "", ""
 
 def scrape_maps(query, limit=300, lookup=True):
-    """SerpAPI से Google Maps scraping + optional email/phone extraction"""
+    """Google Maps scraping + optional email/phone extraction"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -142,7 +142,7 @@ def topbar():
 # ================== PAGES ==================
 def page_home():
     st.title("Welcome to Maps Scraper 🚀")
-    st.write("Signup → Login → Scrape Google Maps data (via SerpAPI)")
+    st.write("Signup → Login → Scrape Google Maps data")
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🔑 Login", use_container_width=True):
@@ -193,9 +193,9 @@ def page_scraper():
             go_to("login")
         return
 
-    st.title("🚀 Google Maps Scraper (SerpAPI + Email Extractor)")
+    st.title("🚀 Google Maps Scraper ")
     query = st.text_input("🔎 Enter your query", "top coaching in Bhopal")
-    max_results = st.number_input("Maximum results to fetch", min_value=5, max_value=100, value=20, step=5)
+    max_results = st.number_input("Maximum results to fetch", min_value=5, max_value=500, value=50, step=5)
     do_lookup = st.checkbox("Extract Email & Phone from Website", value=True)
 
     start_btn = st.button("Start Scraping")
@@ -230,4 +230,5 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
