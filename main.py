@@ -116,51 +116,146 @@ def scrape_maps(url, limit=100, email_lookup=True):
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled",
+            ],
         )
         context = browser.new_context()
         page = context.new_page()
-        page.goto(url, timeout=60_000)
-        time.sleep(4)
 
-        cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
-        count, last_name = 0, None
+        page.goto(url, timeout=90_000)
+        page.wait_for_timeout(2500)
 
-        for card in cards:
-            if limit and count >= limit:
+        # 1) Results feed ko reliably pakdo
+        feed = page.locator('div[role="feed"]').first
+        if not feed.count():
+            feed = page.locator('//div[contains(@class,"m6QErb") and @role="region"]').first
+        try:
+            feed.wait_for(state="visible", timeout=10_000)
+        except Exception:
+            pass
+
+        # helper: "More / Show more results" aaya to click
+        def click_show_more():
+            try:
+                btn = page.locator(
+                    '//button[.//span[contains(text(),"More") or contains(text(),"Show") or contains(text(),"और")]]'
+                ).first
+                if btn.count():
+                    btn.click(timeout=2000)
+                    page.wait_for_timeout(1200)
+            except Exception:
+                pass
+
+        # 2) Scroll logic: card-count growth track karo (virtualized list safe)
+        prev_count, stagnant = 0, 0
+        max_no_growth_cycles = 10
+
+        cards = page.locator('div.Nv2PK')
+        # kabhi-pehli baar koi card render nahi hota; thoda nudge
+        for _ in range(2):
+            if cards.count() == 0:
+                page.mouse.wheel(0, 2000)
+                page.wait_for_timeout(600)
+
+        while True:
+            try:
+                # feed panel ko hi scroll karo
+                eh = feed.element_handle()
+                for _ in range(3):
+                    page.evaluate("(el) => el.scrollBy(0, el.clientHeight)", eh)
+                    page.wait_for_timeout(450)
+            except Exception:
+                page.mouse.wheel(0, 4000)
+
+            click_show_more()
+
+            try:
+                cur = cards.count()
+            except Exception:
+                cur = prev_count
+
+            if cur > prev_count:
+                prev_count = cur
+                stagnant = 0
+            else:
+                stagnant += 1
+
+            if (limit and prev_count >= limit) or stagnant >= max_no_growth_cycles:
                 break
+
+        # 3) Ab iterate using nth() (locator live rehta hai) — .all() mat use karo
+        total = cards.count()
+        if limit:
+            total = min(total, limit)
+
+        count, last_name = 0, None
+        for i in range(total):
             try:
+                card = cards.nth(i)
                 card.scroll_into_view_if_needed()
-                card.click()
-                page.wait_for_timeout(1400)
+                card.click(timeout=4000)
+                page.wait_for_timeout(1200)
             except Exception:
                 continue
 
+            # Name
             try:
-                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
+                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
             except Exception:
-                continue
+                # detail header late aaye to ek chance aur
+                try:
+                    page.wait_for_timeout(800)
+                    name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
+                except Exception:
+                    continue
+
             if name == last_name:
                 continue
             last_name = name
 
-            website, address, phone, rating = "", "", "", ""
+            # Website
+            website = ""
             try:
-                if page.locator('//a[@data-item-id="authority"]').count():
-                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=1000) or ""
-                if page.locator('//button[@data-item-id="address"]').count():
-                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=1000)
-                if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
-                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=1000)
-                el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
-                if el.count():
-                    aria = el.get_attribute("aria-label", timeout=1000) or ""
-                    r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
-                    rating = r1.group(1) if r1 else ""
+                w = page.locator('//a[@data-item-id="authority"]').first
+                if w.count():
+                    website = w.get_attribute("href") or ""
             except Exception:
                 pass
 
-            email_from_site, extra_phones_from_site = ("", "")
+            # Address
+            address = ""
+            try:
+                a = page.locator('//button[@data-item-id="address"]').first
+                if a.count():
+                    address = a.inner_text(timeout=1500)
+            except Exception:
+                pass
+
+            # Phone
+            phone = ""
+            try:
+                ph = page.locator('//button[starts-with(@data-item-id,"phone:")]').first
+                if ph.count():
+                    phone = ph.inner_text(timeout=1500)
+            except Exception:
+                pass
+
+            # Rating
+            rating = ""
+            try:
+                star = page.locator('//span[@role="img" and contains(@aria-label,"stars")]').first
+                if star.count():
+                    aria = star.get_attribute("aria-label") or ""
+                    m = re.search(r"(\d+(?:\.\d+)?)", aria)
+                    rating = m.group(1) if m else ""
+            except Exception:
+                pass
+
+            email_from_site, extra_phones_from_site = "", ""
             if email_lookup and website:
                 email_from_site, extra_phones_from_site = fetch_email_phone_from_site(website)
 
@@ -174,11 +269,16 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 "Rating": rating,
                 "Source (Maps URL)": page.url
             })
+
             count += 1
+            if limit and count >= limit:
+                break
 
         context.close()
         browser.close()
+
     return pd.DataFrame(rows)
+
 
 # ================== DOWNLOAD HELPERS ==================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -308,6 +408,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
