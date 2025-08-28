@@ -1,87 +1,12 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import hashlib, io, time, urllib.parse, re, requests, os, subprocess, sys
+import re, urllib.parse, io, requests, os, time, subprocess, sys
 from playwright.sync_api import sync_playwright
-import time
 
 # ================== APP CONFIG ==================
-st.set_page_config(page_title="Maps Scraper + Auth Flow", layout="wide")
+st.set_page_config(page_title="Unlimited Maps Scraper", layout="wide")
 
-# ================== SESSION ROUTER ==================
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-def go_to(p):
-    st.session_state.page = p
-
-# ================== DB ==================
-def get_connection():
-    return psycopg2.connect(
-        user="postgres.jsjlthhnrtwjcyxowpza",
-        password="@Deep7067",
-        host="aws-1-ap-south-1.pooler.supabase.com",
-        port="6543",
-        dbname="postgres",
-        sslmode="require",
-    )
-
-# ================== SECURITY HELPERS ==================
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
-
-# ---------- USERS ----------
-def register_user(username, password, email):
-    db = get_connection()
-    cur = db.cursor()
-    try:
-        cur.execute(
-            "INSERT INTO users (username, password, email) VALUES (%s,%s,%s)",
-            (username, hash_password(password), email),
-        )
-        db.commit()
-        return True
-    except Exception:
-        return False
-    finally:
-        cur.close(); db.close()
-
-def login_user(username, password):
-    db = get_connection()
-    cur = db.cursor(cursor_factory=RealDictCursor)
-    cur.execute(
-        "SELECT * FROM users WHERE username=%s AND password=%s",
-        (username, hash_password(password)),
-    )
-    user = cur.fetchone()
-    cur.close(); db.close()
-    return user
-
-# ================== PLAYWRIGHT SAFETY NET ==================
-def ensure_chromium_once():
-    cache_flag = "/tmp/.chromium_ready"
-    if os.path.exists(cache_flag):
-        return
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-            browser.close()
-        open(cache_flag, "w").close()
-    except Exception:
-        try:
-            subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
-            open(cache_flag, "w").close()
-        except Exception as e:
-            st.warning(f"Playwright browser install attempt failed: {e}")
-
-ensure_chromium_once()
-
-# ================== SCRAPER UTILS ==================
+# ================== REGEX HELPERS ==================
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 PHONE_RE = re.compile(r"(?:\+?\d[\d\-\s]{7,}\d)")
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -102,7 +27,7 @@ def fetch_email_phone_from_site(url, timeout=12):
     if not url or not url.startswith("http"):
         return "", ""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=timeout, allow_redirects=True)
+        resp = requests.get(url, headers=HEADERS, timeout=timeout)
         html = resp.text
         emails = list({e for e in EMAIL_RE.findall(html)})
         phones = list({p.strip() for p in PHONE_RE.findall(html)})
@@ -110,112 +35,74 @@ def fetch_email_phone_from_site(url, timeout=12):
     except Exception:
         return "", ""
 
-# ================== SCRAPER FUNCTION ==================
-def scrape_maps(url, limit=100, email_lookup=True):
+# ================== SCRAPER ==================
+def scrape_maps(url, limit=500, email_lookup=True):
     rows = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-blink-features=AutomationControlled",
-            ],
-        )
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox","--disable-dev-shm-usage"])
         context = browser.new_context()
         page = context.new_page()
 
         page.goto(url, timeout=90_000)
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3000)
 
-        # 1) Results feed ko reliably pakdo
         feed = page.locator('div[role="feed"]').first
         if not feed.count():
             feed = page.locator('//div[contains(@class,"m6QErb") and @role="region"]').first
-        try:
-            feed.wait_for(state="visible", timeout=10_000)
-        except Exception:
-            pass
 
-        # helper: "More / Show more results" aaya to click
-        def click_show_more():
-            try:
-                btn = page.locator(
-                    '//button[.//span[contains(text(),"More") or contains(text(),"Show") or contains(text(),"और")]]'
-                ).first
-                if btn.count():
-                    btn.click(timeout=2000)
-                    page.wait_for_timeout(1200)
-            except Exception:
-                pass
-
-        # 2) Scroll logic: card-count growth track karo (virtualized list safe)
-        prev_count, stagnant = 0, 0
-        max_no_growth_cycles = 10
-
+        # Scroll loop until we have enough cards
         cards = page.locator('div.Nv2PK')
-        # kabhi-pehli baar koi card render nahi hota; thoda nudge
-        for _ in range(2):
-            if cards.count() == 0:
-                page.mouse.wheel(0, 2000)
-                page.wait_for_timeout(600)
+        prev_count = 0
+        stagnant_cycles = 0
 
         while True:
             try:
-                # feed panel ko hi scroll karo
                 eh = feed.element_handle()
-                for _ in range(3):
+                for _ in range(5):
                     page.evaluate("(el) => el.scrollBy(0, el.clientHeight)", eh)
-                    page.wait_for_timeout(450)
+                    page.wait_for_timeout(600)
             except Exception:
-                page.mouse.wheel(0, 4000)
+                page.mouse.wheel(0, 5000)
 
-            click_show_more()
-
+            # Try clicking "More results"
             try:
-                cur = cards.count()
-            except Exception:
-                cur = prev_count
+                btn = page.locator('//button[.//span[contains(text(),"More") or contains(text(),"Show") or contains(text(),"और")]]').first
+                if btn.count():
+                    btn.click(timeout=2000)
+                    page.wait_for_timeout(1500)
+            except:
+                pass
 
-            if cur > prev_count:
-                prev_count = cur
-                stagnant = 0
+            cur_count = cards.count()
+            if cur_count > prev_count:
+                prev_count = cur_count
+                stagnant_cycles = 0
             else:
-                stagnant += 1
+                stagnant_cycles += 1
 
-            if (limit and prev_count >= limit) or stagnant >= max_no_growth_cycles:
+            if prev_count >= limit:
+                break
+            if stagnant_cycles >= 20:   # ज्यादा देर तक growth नहीं तो break
                 break
 
-        # 3) Ab iterate using nth() (locator live rehta hai) — .all() mat use karo
+        # Extract data
         total = cards.count()
-        if limit:
-            total = min(total, limit)
+        total = min(total, limit)
 
-        count, last_name = 0, None
         for i in range(total):
             try:
                 card = cards.nth(i)
                 card.scroll_into_view_if_needed()
                 card.click(timeout=4000)
-                page.wait_for_timeout(1200)
-            except Exception:
+                page.wait_for_timeout(1500)
+            except:
                 continue
 
             # Name
             try:
                 name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
-            except Exception:
-                # detail header late aaye to ek chance aur
-                try:
-                    page.wait_for_timeout(800)
-                    name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
-                except Exception:
-                    continue
-
-            if name == last_name:
+            except:
                 continue
-            last_name = name
 
             # Website
             website = ""
@@ -223,7 +110,7 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 w = page.locator('//a[@data-item-id="authority"]').first
                 if w.count():
                     website = w.get_attribute("href") or ""
-            except Exception:
+            except:
                 pass
 
             # Address
@@ -231,8 +118,8 @@ def scrape_maps(url, limit=100, email_lookup=True):
             try:
                 a = page.locator('//button[@data-item-id="address"]').first
                 if a.count():
-                    address = a.inner_text(timeout=1500)
-            except Exception:
+                    address = a.inner_text(timeout=2000)
+            except:
                 pass
 
             # Phone
@@ -240,8 +127,8 @@ def scrape_maps(url, limit=100, email_lookup=True):
             try:
                 ph = page.locator('//button[starts-with(@data-item-id,"phone:")]').first
                 if ph.count():
-                    phone = ph.inner_text(timeout=1500)
-            except Exception:
+                    phone = ph.inner_text(timeout=2000)
+            except:
                 pass
 
             # Rating
@@ -252,7 +139,7 @@ def scrape_maps(url, limit=100, email_lookup=True):
                     aria = star.get_attribute("aria-label") or ""
                     m = re.search(r"(\d+(?:\.\d+)?)", aria)
                     rating = m.group(1) if m else ""
-            except Exception:
+            except:
                 pass
 
             email_from_site, extra_phones_from_site = "", ""
@@ -270,15 +157,9 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 "Source (Maps URL)": page.url
             })
 
-            count += 1
-            if limit and count >= limit:
-                break
-
         context.close()
         browser.close()
-
     return pd.DataFrame(rows)
-
 
 # ================== DOWNLOAD HELPERS ==================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -288,130 +169,25 @@ def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
-# ================== TOPBAR ==================
-def topbar():
-    cols = st.columns([1,1,1,3])
-    with cols[0]:
-        if st.button("🏠 Home"):
-            go_to("home")
-    # with cols[1]:
-    #     if st.button("🔑 Login"):
-    #         go_to("login")
-    # with cols[2]:
-    #     if st.button("📝 Signup"):
-    #         go_to("signup")
-    with cols[3]:
-        if st.session_state.logged_in and st.session_state.user:
-            u = st.session_state.user["username"]
-            st.info(f"Logged in as **{u}**")
-            if st.button("🚪 Logout"):
-                st.session_state.logged_in = False
-                st.session_state.user = None
-                go_to("home")
+# ================== STREAMLIT UI ==================
+st.title("🚀 Unlimited Google Maps Scraper")
 
-# ================== PAGES ==================
-def page_home():
-    st.title("Welcome to Maps Scraper 🚀")
-    st.write("Choose an option below to continue.")
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("🔑 Go to Login", use_container_width=True):
-            go_to("login")
-    with c2:
-        if st.button("📝 Create Account", use_container_width=True):
-            go_to("signup")
-    if st.session_state.logged_in:
-        st.success("You are already logged in.")
-        if st.button("➡️ Open Scraper", use_container_width=True):
-            go_to("scraper")
+user_input = st.text_input("🔎 Enter query / Google Maps URL", "top coaching in Bhopal")
+max_results = st.number_input("Maximum results to fetch", min_value=20, max_value=2000, value=200, step=20)
+do_email_lookup = st.checkbox("Also extract Emails / Extra Phones from websites", value=True)
 
-def page_login():
-    st.title("Login 🔑")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    
-    if st.button("Login"):
-        user = login_user(username, password)
-        if user:
-            st.session_state.logged_in = True
-            st.session_state.user = user
-            st.success("✅ Login successful! Redirecting to Scraper...")
-            st.session_state.page = "scraper"
-            time.sleep(1.5)           # 1.5 second wait
-            st.experimental_rerun()   # फिर Scraper page पर rerun
-        else:
-            st.error("Invalid credentials")
+if st.button("Start Scraping"):
+    maps_url = get_maps_url(user_input)
+    with st.spinner("Scraping in progress... Please wait"):
+        df = scrape_maps(maps_url, int(max_results), bool(do_email_lookup))
+        st.success(f"✅ Scraping completed! Found {len(df)} results.")
+        st.dataframe(df, use_container_width=True)
 
-    st.button("⬅️ Back", on_click=lambda: go_to("home"))
+        # Downloads
+        csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("⬇️ Download CSV", data=csv_bytes, file_name="maps_data.csv", mime="text/csv")
 
-def page_signup():
-    st.title("Signup 📝")
-    new_user = st.text_input("Choose Username")
-    new_email = st.text_input("Email")
-    new_pass = st.text_input("Choose Password", type="password")
-    if st.button("Create Account"):
-        if new_user and new_email and new_pass:
-            if register_user(new_user, new_pass, new_email):
-                st.success("Signup successful! Please login now.")
-                go_to("login")
-            else:
-                st.error("User already exists or DB error.")
-        else:
-            st.warning("Please fill all fields.")
-    st.button("⬅️ Back", on_click=lambda: go_to("home"))
-
-def page_scraper():
-    if not st.session_state.logged_in or not st.session_state.user:
-        st.error("Please login first")
-        if st.button("Go to Login"):
-            go_to("login")
-        return
-    st.title("🚀 Google Maps Scraper")
-    user_input = st.text_input("🔎 Enter query OR Google Search URL OR Google Maps URL", "top coaching in Bhopal")
-    max_results = st.number_input("Maximum results to fetch", min_value=5, max_value=500, value=60, step=5)
-    do_email_lookup = st.checkbox("Website से Email/extra Phones भी निकालें (slower)", value=True)
-    start_btn = st.button("Start Scraping")
-    if start_btn:
-        maps_url = get_maps_url(user_input)
-        if not maps_url.strip():
-            st.error("Please enter a valid URL or query")
-        else:
-            with st.spinner("Scraping in progress..."):
-                try:
-                    df = scrape_maps(maps_url, int(max_results), bool(do_email_lookup))
-                    st.success(f"Scraping completed! Found {len(df)} results.")
-                    st.dataframe(df, use_container_width=True)
-                    csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
-                    st.download_button("⬇️ Download CSV", data=csv_bytes, file_name="maps_scrape.csv", mime="text/csv")
-                    xlsx_bytes = df_to_excel_bytes(df)
-                    st.download_button(
-                        "⬇️ Download Excel",
-                        data=xlsx_bytes,
-                        file_name="maps_scrape.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                except Exception as e:
-                    st.error(f"Scraping failed: {e}")
-
-# ================== LAYOUT ==================
-topbar()
-
-# Simple router
-page = st.session_state.page
-if page == "home":
-    page_home()
-elif page == "login":
-    page_login()
-elif page == "signup":
-    page_signup()
-elif page == "scraper":
-    page_scraper()
-else:
-    page_home()
-
-
-
-
-
-
-
+        xlsx_bytes = df_to_excel_bytes(df)
+        st.download_button("⬇️ Download Excel", data=xlsx_bytes,
+                           file_name="maps_data.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
