@@ -89,6 +89,7 @@ def scrape_maps(query, limit=50, lookup=True):
         "q": query,
         "type": "search",
         "api_key": SERPAPI_KEY,
+        "start": 20
     }
 
     rows = []
@@ -275,6 +276,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
