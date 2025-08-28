@@ -88,8 +88,7 @@ def scrape_maps(query, limit=50, lookup=True):
         "engine": "google_maps",
         "q": query,
         "type": "search",
-        "api_key": SERPAPI_KEY,
-        "start": 20
+        "api_key": SERPAPI_KEY
     }
 
     rows = []
@@ -109,7 +108,7 @@ def scrape_maps(query, limit=50, lookup=True):
         if not local_results:
             break  # कोई और data नहीं मिला
 
-        for idx, r in enumerate(local_results, start=1):
+        for r in local_results:
             if fetched >= limit:
                 break
 
@@ -151,7 +150,13 @@ def scrape_maps(query, limit=50, lookup=True):
         if not next_page_token:
             break  # और pages नहीं मिले
 
-        params["next_page_token"] = next_page_token
+        params = {
+            "engine": "google_maps",
+            "q": query,
+            "type": "search",
+            "api_key": SERPAPI_KEY,
+            "next_page_token": next_page_token
+        }
         page += 1
 
         # ⏳ Wait before next call (SerpAPI docs suggest ~2s)
@@ -162,6 +167,7 @@ def scrape_maps(query, limit=50, lookup=True):
     status_text.success(f"✅ Scraping complete in {total_time}s! (Got {len(rows)} results)")
 
     return pd.DataFrame(rows)
+
 
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
@@ -276,6 +282,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
