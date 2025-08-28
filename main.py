@@ -80,8 +80,9 @@ def extract_email_phone(website_url):
     except Exception:
         return "", ""
 
+
 def scrape_maps(query, limit=50, lookup=True):
-    """SerpAPI से Google Maps scraping + Progress + ETA"""
+    """SerpAPI से Google Maps scraping + Pagination + Progress + ETA"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -89,56 +90,75 @@ def scrape_maps(query, limit=50, lookup=True):
         "type": "search",
         "api_key": SERPAPI_KEY,
     }
-    res = requests.get(url, params=params)
-    data = res.json()
 
     rows = []
-    local_results = data.get("local_results", [])
+    fetched = 0
+    page = 1
 
-    # ✅ Progress + Status defined here
     progress = st.progress(0)
     status_text = st.empty()
-    total = min(limit, len(local_results))
-
     start_time = time.time()
     times = []
 
-    for idx, r in enumerate(local_results[:limit], start=1):
-        t0 = time.time()
+    while fetched < limit:
+        res = requests.get(url, params=params)
+        data = res.json()
 
-        email, phone_site = "", ""
-        if lookup and r.get("website"):
-            email, phone_site = extract_email_phone(r["website"])
+        local_results = data.get("local_results", [])
+        if not local_results:
+            break  # कोई और data नहीं मिला
 
-        rows.append({
-            "Business Name": r.get("title"),
-            "Address": r.get("address"),
-            "Phone (Maps)": r.get("phone"),
-            "Phone (Website)": phone_site,
-            "Email (Website)": email,
-            "Website": r.get("website"),
-            "Rating": r.get("rating"),
-            "Reviews": r.get("reviews"),
-            "Category": r.get("type"),
-            "Source Link": r.get("link")
-        })
+        for idx, r in enumerate(local_results, start=1):
+            if fetched >= limit:
+                break
 
-        # Time taken
-        t1 = time.time()
-        times.append(t1 - t0)
+            t0 = time.time()
 
-        # ETA
-        avg_time = sum(times) / len(times)
-        remaining = total - idx
-        eta_sec = int(avg_time * remaining)
+            email, phone_site = "", ""
+            if lookup and r.get("website"):
+                email, phone_site = extract_email_phone(r["website"])
 
-        # Update UI
-        progress.progress(int(idx / total * 100))
-        status_text.text(f"Scraping {idx}/{total} businesses... ⏳ ETA: {eta_sec}s")
+            rows.append({
+                "Business Name": r.get("title"),
+                "Address": r.get("address"),
+                "Phone (Maps)": r.get("phone"),
+                "Phone (Website)": phone_site,
+                "Email (Website)": email,
+                "Website": r.get("website"),
+                "Rating": r.get("rating"),
+                "Reviews": r.get("reviews"),
+                "Category": r.get("type"),
+                "Source Link": r.get("link")
+            })
+
+            fetched += 1
+            t1 = time.time()
+            times.append(t1 - t0)
+
+            # ETA calc
+            avg_time = sum(times) / len(times)
+            remaining = limit - fetched
+            eta_sec = int(avg_time * remaining)
+
+            progress.progress(int(fetched / limit * 100))
+            status_text.text(
+                f"Scraping {fetched}/{limit} businesses (Page {page})... ⏳ ETA: {eta_sec}s"
+            )
+
+        # Pagination (अगर next page है तो)
+        next_page_token = data.get("serpapi_pagination", {}).get("next_page_token")
+        if not next_page_token:
+            break  # और pages नहीं मिले
+
+        params["next_page_token"] = next_page_token
+        page += 1
+
+        # ⏳ Wait before next call (SerpAPI docs suggest ~2s)
+        time.sleep(2)
 
     progress.empty()
     total_time = int(time.time() - start_time)
-    status_text.success(f"✅ Scraping complete in {total_time}s!")
+    status_text.success(f"✅ Scraping complete in {total_time}s! (Got {len(rows)} results)")
 
     return pd.DataFrame(rows)
 
@@ -255,6 +275,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
