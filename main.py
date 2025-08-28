@@ -126,109 +126,136 @@ def scrape_maps(url, limit=100, email_lookup=True):
         )
         context = browser.new_context()
         page = context.new_page()
-        page.goto(url, timeout=60_000)
-        time.sleep(4)
+        page.goto(url, timeout=90_000)
+        page.wait_for_timeout(2500)
 
-        # Try to find results panel (new/old UI)
-        panel = page.locator('//div[contains(@aria-label, "Results for")]')
-        if not panel.count():
-            panel = page.locator('//div[@role="feed"]')
+        # --- Wait for results feed (language-agnostic) ---
+        # New UI generally uses role="feed" for the left list
+        feed = page.locator('div[role="feed"]').first
+        if not feed.count():
+            # fallback older UI
+            feed = page.locator('//div[contains(@aria-label, "Results") or contains(@aria-label, "results") or contains(@class,"m6QErb")]').first
 
-        # aggressive scroll to load up to 'limit'
-        last_height, stagnant = 0, 0
-        handle = None
-        if panel.count():
+        # If nothing yet, try a tiny wait
+        try:
+            feed.wait_for(state="visible", timeout=10_000)
+        except Exception:
+            pass
+
+        # Helper: click "More/Show more results" if it appears
+        def click_show_more_safely():
             try:
-                handle = panel.element_handle()
+                more_btn = page.locator(
+                    '//button[.//span[contains(text(),"More") or contains(text(),"more") or contains(text(),"Show")]]'
+                ).first
+                if more_btn.count():
+                    more_btn.click(timeout=2000)
+                    page.wait_for_timeout(1200)
             except Exception:
-                handle = None
+                pass
+
+        # ---- Aggressive scroll of the FEED panel until we hit 'limit' or no growth ----
+        prev_count, stagnant = 0, 0
+        max_no_growth_cycles = 8  # a bit higher for virtualized lists
 
         while True:
+            # Scroll the feed panel specifically (not the whole page)
             try:
-                if handle is not None:
-                    page.evaluate("(el) => el.scrollTop = el.scrollHeight", handle)
-                else:
-                    page.mouse.wheel(0, 20000)
+                # scroll by one viewport height multiple times
+                for _ in range(3):
+                    page.evaluate("(el) => el.scrollBy(0, el.clientHeight)", feed.element_handle())
+                    page.wait_for_timeout(450)
             except Exception:
-                break
+                # fallback: page-level wheel
+                page.mouse.wheel(0, 4000)
 
-            time.sleep(2.2)
+            click_show_more_safely()
+
+            # count cards currently in DOM
+            cards_loc = page.locator('div.Nv2PK')  # cards
             try:
-                new_height = page.evaluate("(el) => el.scrollHeight", handle) if handle is not None else last_height + 1
+                cur = cards_loc.count()
             except Exception:
-                new_height = last_height + 1
+                cur = 0
 
-            if new_height == last_height:
-                stagnant += 1
-            else:
+            if cur > prev_count:
+                prev_count = cur
                 stagnant = 0
-            last_height = new_height
+            else:
+                stagnant += 1
 
-            cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
-            if len(cards) >= limit or stagnant >= 3:
+            if prev_count >= limit or stagnant >= max_no_growth_cycles:
                 break
 
-        cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
+        # Final list of card handles (freeze now)
+        cards = page.locator('div.Nv2PK')
+        total = min(cards.count(), limit if limit else cards.count())
+
         count, last_name = 0, None
-
-        for card in cards:
-            if limit and count >= limit:
-                break
+        for i in range(total):
             try:
+                card = cards.nth(i)
                 card.scroll_into_view_if_needed()
-                card.click()
-                page.wait_for_timeout(1400)
+                card.click(timeout=4000)
+                page.wait_for_timeout(1200)
             except Exception:
                 continue
 
             # Business Name
             try:
-                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
+                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
             except Exception:
-                continue
+                # Sometimes detail header takes time; try a second look
+                try:
+                    page.wait_for_timeout(800)
+                    name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
+                except Exception:
+                    continue
 
-            if name == last_name:
+            if name == last_name:  # avoid duplicate click on same card
                 continue
             last_name = name
 
             # Website
             website = ""
             try:
-                if page.locator('//a[@data-item-id="authority"]').count():
-                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=1000) or ""
+                w = page.locator('//a[@data-item-id="authority"]')
+                if w.count():
+                    website = w.first.get_attribute("href") or ""
             except Exception:
-                website = ""
+                pass
 
             # Address
             address = ""
             try:
-                if page.locator('//button[@data-item-id="address"]').count():
-                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=1000)
-            except Exception:
-                address = ""
-
-            # Phone
-            phone = ""
-            try:
-                if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
-                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=1000)
-            except Exception:
-                phone = ""
-
-            # Ratings (optional)
-            rating = ""
-            try:
-                aria = ""
-                el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
-                if el.count():
-                    aria = el.get_attribute("aria-label", timeout=1000) or ""
-                if aria:
-                    r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
-                    rating = r1.group(1) if r1 else ""
+                a = page.locator('//button[@data-item-id="address"]')
+                if a.count():
+                    address = a.first.inner_text(timeout=1500)
             except Exception:
                 pass
 
-            email_from_site, extra_phones_from_site = ("", "")
+            # Phone shown on Maps
+            phone = ""
+            try:
+                ph = page.locator('//button[starts-with(@data-item-id,"phone:")]')
+                if ph.count():
+                    phone = ph.first.inner_text(timeout=1500)
+            except Exception:
+                pass
+
+            # Rating
+            rating = ""
+            try:
+                el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
+                if el.count():
+                    aria = el.first.get_attribute("aria-label") or ""
+                    m = re.search(r"(\d+(?:\.\d+)?)", aria)
+                    if m:
+                        rating = m.group(1)
+            except Exception:
+                pass
+
+            email_from_site, extra_phones_from_site = "", ""
             if email_lookup and website:
                 email_from_site, extra_phones_from_site = fetch_email_phone_from_site(website)
 
@@ -242,12 +269,16 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 "Rating": rating,
                 "Source (Maps URL)": page.url
             })
+
             count += 1
+            if limit and count >= limit:
+                break
 
         context.close()
         browser.close()
 
     return pd.DataFrame(rows)
+
 
 # ================== DOWNLOAD HELPERS ==================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -377,6 +408,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
