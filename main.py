@@ -3,6 +3,7 @@ import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import hashlib, io, requests, re
+import time
 
 # ================== APP CONFIG ==================
 st.set_page_config(page_title="Maps Scraper )", layout="wide")
@@ -254,6 +255,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
