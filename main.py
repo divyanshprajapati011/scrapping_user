@@ -79,7 +79,7 @@ def extract_email_phone(website_url):
     except Exception:
         return "", ""
 
-def scrape_maps(query, limit=50, lookup=True):
+def scrape_maps(query, limit=300, lookup=True):
     """SerpAPI से Google Maps scraping + optional email/phone extraction"""
     url = "https://serpapi.com/search"
     params = {
@@ -110,7 +110,11 @@ def scrape_maps(query, limit=50, lookup=True):
             "Category": r.get("type"),
             "Source Link": r.get("link")
         })
+        progress.progress(int(idx / total * 100))
+        status_text.text(f"Scraping {idx}/{total} businesses...")
 
+    progress.empty()
+    status_text.success("✅ Scraping complete!")
     return pd.DataFrame(rows)
 
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -226,3 +230,4 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
