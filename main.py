@@ -88,7 +88,7 @@ def scrape_maps(query, limit=50, lookup=True):
         "engine": "google_maps",
         "q": query,
         "type": "search",
-        "api_key": SERPAPI_KEY
+        "api_key": SERPAPI_KEY,
     }
 
     rows = []
@@ -152,7 +152,6 @@ def scrape_maps(query, limit=50, lookup=True):
 
         params = {
             "engine": "google_maps",
-            "q": query,
             "type": "search",
             "api_key": SERPAPI_KEY,
             "next_page_token": next_page_token
@@ -282,6 +281,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
