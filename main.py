@@ -114,98 +114,133 @@ def fetch_email_phone_from_site(url, timeout=12):
 # ================== SCRAPER FUNCTION ==================
 def scrape_maps(url, limit=100, email_lookup=True):
     rows = []
-    seen = set()
-
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled",
+            ],
         )
         context = browser.new_context()
         page = context.new_page()
+        page.goto(url, timeout=60_000)
+        time.sleep(4)
 
-        # ✅ Longer wait
-        page.goto(url, timeout=120_000, wait_until="networkidle")
-        time.sleep(5)
+        # Try to find results panel (new/old UI)
+        panel = page.locator('//div[contains(@aria-label, "Results for")]')
+        if not panel.count():
+            panel = page.locator('//div[@role="feed"]')
 
-        # ✅ Infinite scroll until enough results
+        # aggressive scroll to load up to 'limit'
+        last_height, stagnant = 0, 0
+        handle = None
+        if panel.count():
+            try:
+                handle = panel.element_handle()
+            except Exception:
+                handle = None
+
         while True:
-            cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
-            if len(cards) >= limit:
+            try:
+                if handle is not None:
+                    page.evaluate("(el) => el.scrollTop = el.scrollHeight", handle)
+                else:
+                    page.mouse.wheel(0, 20000)
+            except Exception:
                 break
-            page.mouse.wheel(0, 2500)
-            page.wait_for_timeout(2500)
-            # stop if no new cards load
-            if len(cards) >= limit or len(cards) > 200:  # safety
+
+            time.sleep(2.2)
+            try:
+                new_height = page.evaluate("(el) => el.scrollHeight", handle) if handle is not None else last_height + 1
+            except Exception:
+                new_height = last_height + 1
+
+            if new_height == last_height:
+                stagnant += 1
+            else:
+                stagnant = 0
+            last_height = new_height
+
+            cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
+            if len(cards) >= limit or stagnant >= 3:
                 break
 
         cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
-        count = 0
+        count, last_name = 0, None
 
         for card in cards:
             if limit and count >= limit:
                 break
-
             try:
                 card.scroll_into_view_if_needed()
                 card.click()
-                page.wait_for_timeout(1800)
+                page.wait_for_timeout(1400)
             except Exception:
                 continue
 
-            # Name
+            # Business Name
             try:
-                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
+                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
             except Exception:
                 continue
 
-            website, address, phone, rating, reviews = "", "", "", "", ""
+            if name == last_name:
+                continue
+            last_name = name
 
+            # Website
+            website = ""
             try:
                 if page.locator('//a[@data-item-id="authority"]').count():
-                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=2000) or ""
-                if page.locator('//button[@data-item-id="address"]').count():
-                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=2000)
-                if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
-                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=2000)
+                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=1000) or ""
+            except Exception:
+                website = ""
 
-                # ✅ Rating (fallback locators)
-                if page.locator('//span[@role="img"][contains(@aria-label,"stars")]').count():
-                    aria = page.locator('//span[@role="img"][contains(@aria-label,"stars")]').get_attribute("aria-label", timeout=2000) or ""
+            # Address
+            address = ""
+            try:
+                if page.locator('//button[@data-item-id="address"]').count():
+                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=1000)
+            except Exception:
+                address = ""
+
+            # Phone
+            phone = ""
+            try:
+                if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
+                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=1000)
+            except Exception:
+                phone = ""
+
+            # Ratings (optional)
+            rating = ""
+            try:
+                aria = ""
+                el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
+                if el.count():
+                    aria = el.get_attribute("aria-label", timeout=1000) or ""
+                if aria:
                     r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
                     rating = r1.group(1) if r1 else ""
-                elif page.locator('//span[contains(@aria-label,"stars")]').count():
-                    txt = page.locator('//span[contains(@aria-label,"stars")]').nth(0).get_attribute("aria-label", timeout=2000) or ""
-                    r1 = re.search(r"(\d+(?:\.\d+)?)", txt)
-                    rating = r1.group(1) if r1 else ""
-
-                # ✅ Reviews (fallback)
-                if page.locator('//span[contains(text(),"review")]').count():
-                    txt = page.locator('//span[contains(text(),"review")]').nth(0).inner_text(timeout=2000)
-                    r2 = re.search(r"(\d[\d,]*)", txt)
-                    reviews = r2.group(1).replace(",", "") if r2 else ""
             except Exception:
                 pass
 
-            # Duplicate check
-            key = (name.strip(), website.strip())
-            if key in seen:
-                continue
-            seen.add(key)
-
-            # Email + extra phones from website
             email_from_site, extra_phones_from_site = ("", "")
             if email_lookup and website:
                 email_from_site, extra_phones_from_site = fetch_email_phone_from_site(website)
 
             rows.append({
                 "Business Name": name,
-                "Address": address,
                 "Website": website,
+                "Address": address,
+                "Phone (Maps)": phone,
                 "Email (from site)": email_from_site,
-                "Mobile": phone if phone else extra_phones_from_site,
+                "Extra Phones (from site)": extra_phones_from_site,
                 "Rating": rating,
-                "Review Count": reviews,
+                "Source (Maps URL)": page.url
             })
             count += 1
 
@@ -213,7 +248,6 @@ def scrape_maps(url, limit=100, email_lookup=True):
         browser.close()
 
     return pd.DataFrame(rows)
-
 
 # ================== DOWNLOAD HELPERS ==================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -343,6 +377,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
