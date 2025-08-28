@@ -82,7 +82,7 @@ def extract_email_phone(website_url):
 
 
 def scrape_maps(query, limit=50, lookup=True):
-    """SerpAPI से Google Maps scraping + Pagination + Progress + ETA"""
+    """SerpAPI से Google Maps scraping + Pagination + Progress + ETA (Fixed Loop)"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -106,7 +106,9 @@ def scrape_maps(query, limit=50, lookup=True):
 
         local_results = data.get("local_results", [])
         if not local_results:
-            break  # कोई और data नहीं मिला
+            # अगर result खाली है → wait & retry
+            time.sleep(3)
+            continue
 
         for r in local_results:
             if fetched >= limit:
@@ -135,7 +137,7 @@ def scrape_maps(query, limit=50, lookup=True):
             t1 = time.time()
             times.append(t1 - t0)
 
-            # ETA calc
+            # ETA calculation
             avg_time = sum(times) / len(times)
             remaining = limit - fetched
             eta_sec = int(avg_time * remaining)
@@ -145,10 +147,13 @@ def scrape_maps(query, limit=50, lookup=True):
                 f"Scraping {fetched}/{limit} businesses (Page {page})... ⏳ ETA: {eta_sec}s"
             )
 
-        # Pagination (अगर next page है तो)
+        # Pagination (next page token check)
         next_page_token = data.get("serpapi_pagination", {}).get("next_page_token")
-        if not next_page_token:
-            break  # और pages नहीं मिले
+        if not next_page_token or fetched >= limit:
+            break
+
+        # 🔑 IMPORTANT → 5 sec wait (SerpAPI requirement)
+        time.sleep(5)
 
         params = {
             "engine": "google_maps",
@@ -158,15 +163,11 @@ def scrape_maps(query, limit=50, lookup=True):
         }
         page += 1
 
-        # ⏳ Wait before next call (SerpAPI docs suggest ~2s)
-        time.sleep(2)
-
     progress.empty()
     total_time = int(time.time() - start_time)
     status_text.success(f"✅ Scraping complete in {total_time}s! (Got {len(rows)} results)")
 
     return pd.DataFrame(rows)
-
 
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
@@ -281,6 +282,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
