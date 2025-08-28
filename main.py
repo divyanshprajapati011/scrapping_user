@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import psycopg2
@@ -117,145 +116,51 @@ def scrape_maps(url, limit=100, email_lookup=True):
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-blink-features=AutomationControlled",
-            ],
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
         )
         context = browser.new_context()
         page = context.new_page()
-        page.goto(url, timeout=90_000)
-        page.wait_for_timeout(2500)
+        page.goto(url, timeout=60_000)
+        time.sleep(4)
 
-        # --- Wait for results feed (language-agnostic) ---
-        # New UI generally uses role="feed" for the left list
-        feed = page.locator('div[role="feed"]').first
-        if not feed.count():
-            # fallback older UI
-            feed = page.locator('//div[contains(@aria-label, "Results") or contains(@aria-label, "results") or contains(@class,"m6QErb")]').first
-
-        # If nothing yet, try a tiny wait
-        try:
-            feed.wait_for(state="visible", timeout=10_000)
-        except Exception:
-            pass
-
-        # Helper: click "More/Show more results" if it appears
-        def click_show_more_safely():
-            try:
-                more_btn = page.locator(
-                    '//button[.//span[contains(text(),"More") or contains(text(),"more") or contains(text(),"Show")]]'
-                ).first
-                if more_btn.count():
-                    more_btn.click(timeout=2000)
-                    page.wait_for_timeout(1200)
-            except Exception:
-                pass
-
-        # ---- Aggressive scroll of the FEED panel until we hit 'limit' or no growth ----
-        prev_count, stagnant = 0, 0
-        max_no_growth_cycles = 8  # a bit higher for virtualized lists
-
-        while True:
-            # Scroll the feed panel specifically (not the whole page)
-            try:
-                # scroll by one viewport height multiple times
-                for _ in range(3):
-                    page.evaluate("(el) => el.scrollBy(0, el.clientHeight)", feed.element_handle())
-                    page.wait_for_timeout(450)
-            except Exception:
-                # fallback: page-level wheel
-                page.mouse.wheel(0, 4000)
-
-            click_show_more_safely()
-
-            # count cards currently in DOM
-            cards_loc = page.locator('div.Nv2PK')  # cards
-            try:
-                cur = cards_loc.count()
-            except Exception:
-                cur = 0
-
-            if cur > prev_count:
-                prev_count = cur
-                stagnant = 0
-            else:
-                stagnant += 1
-
-            if prev_count >= limit or stagnant >= max_no_growth_cycles:
-                break
-
-        # Final list of card handles (freeze now)
-        cards = page.locator('div.Nv2PK')
-        total = min(cards.count(), limit if limit else cards.count())
-
+        cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
         count, last_name = 0, None
-        for i in range(total):
+
+        for card in cards:
+            if limit and count >= limit:
+                break
             try:
-                card = cards.nth(i)
                 card.scroll_into_view_if_needed()
-                card.click(timeout=4000)
-                page.wait_for_timeout(1200)
+                card.click()
+                page.wait_for_timeout(1400)
             except Exception:
                 continue
 
-            # Business Name
             try:
-                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
+                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
             except Exception:
-                # Sometimes detail header takes time; try a second look
-                try:
-                    page.wait_for_timeout(800)
-                    name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
-                except Exception:
-                    continue
-
-            if name == last_name:  # avoid duplicate click on same card
+                continue
+            if name == last_name:
                 continue
             last_name = name
 
-            # Website
-            website = ""
+            website, address, phone, rating = "", "", "", ""
             try:
-                w = page.locator('//a[@data-item-id="authority"]')
-                if w.count():
-                    website = w.first.get_attribute("href") or ""
-            except Exception:
-                pass
-
-            # Address
-            address = ""
-            try:
-                a = page.locator('//button[@data-item-id="address"]')
-                if a.count():
-                    address = a.first.inner_text(timeout=1500)
-            except Exception:
-                pass
-
-            # Phone shown on Maps
-            phone = ""
-            try:
-                ph = page.locator('//button[starts-with(@data-item-id,"phone:")]')
-                if ph.count():
-                    phone = ph.first.inner_text(timeout=1500)
-            except Exception:
-                pass
-
-            # Rating
-            rating = ""
-            try:
+                if page.locator('//a[@data-item-id="authority"]').count():
+                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=1000) or ""
+                if page.locator('//button[@data-item-id="address"]').count():
+                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=1000)
+                if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
+                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=1000)
                 el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
                 if el.count():
-                    aria = el.first.get_attribute("aria-label") or ""
-                    m = re.search(r"(\d+(?:\.\d+)?)", aria)
-                    if m:
-                        rating = m.group(1)
+                    aria = el.get_attribute("aria-label", timeout=1000) or ""
+                    r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
+                    rating = r1.group(1) if r1 else ""
             except Exception:
                 pass
 
-            email_from_site, extra_phones_from_site = "", ""
+            email_from_site, extra_phones_from_site = ("", "")
             if email_lookup and website:
                 email_from_site, extra_phones_from_site = fetch_email_phone_from_site(website)
 
@@ -269,16 +174,11 @@ def scrape_maps(url, limit=100, email_lookup=True):
                 "Rating": rating,
                 "Source (Maps URL)": page.url
             })
-
             count += 1
-            if limit and count >= limit:
-                break
 
         context.close()
         browser.close()
-
     return pd.DataFrame(rows)
-
 
 # ================== DOWNLOAD HELPERS ==================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -336,13 +236,13 @@ def page_login():
             st.session_state.logged_in = True
             st.session_state.user = user
             st.success("✅ Login successful! Redirecting to Scraper...")
-            # st.session_state.page = scraper
-            # time.sleep(0)           # 0 second wait
-            # st.experimental_rerun()   # फिर Scraper page पर rerun
+            st.session_state.page = "scraper"
+            time.sleep(1.5)           # 1.5 second wait
+            st.experimental_rerun()   # फिर Scraper page पर rerun
         else:
             st.error("Invalid credentials")
 
-    st.button("⬅️ back Home ", on_click=lambda: go_to("home"))
+    st.button("⬅️ Back", on_click=lambda: go_to("home"))
 
 def page_signup():
     st.title("Signup 📝")
@@ -358,7 +258,7 @@ def page_signup():
                 st.error("User already exists or DB error.")
         else:
             st.warning("Please fill all fields.")
-    st.button("⬅️ login ",on_click=lambda: go_to("login"))
+    st.button("⬅️ Back", on_click=lambda: go_to("home"))
 
 def page_scraper():
     if not st.session_state.logged_in or not st.session_state.user:
@@ -408,24 +308,6 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
