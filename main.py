@@ -79,8 +79,8 @@ def extract_email_phone(website_url):
     except Exception:
         return "", ""
 
-def scrape_maps(query, limit=300, lookup=True):
-    """Google Maps scraping + optional email/phone extraction"""
+def scrape_maps(query, limit=50, lookup=True):
+    """SerpAPI से Google Maps scraping + Progress + ETA"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -93,7 +93,18 @@ def scrape_maps(query, limit=300, lookup=True):
 
     rows = []
     local_results = data.get("local_results", [])
-    for r in local_results[:limit]:
+
+    # ✅ Progress + Status defined here
+    progress = st.progress(0)
+    status_text = st.empty()
+    total = min(limit, len(local_results))
+
+    start_time = time.time()
+    times = []
+
+    for idx, r in enumerate(local_results[:limit], start=1):
+        t0 = time.time()
+
         email, phone_site = "", ""
         if lookup and r.get("website"):
             email, phone_site = extract_email_phone(r["website"])
@@ -110,11 +121,24 @@ def scrape_maps(query, limit=300, lookup=True):
             "Category": r.get("type"),
             "Source Link": r.get("link")
         })
+
+        # Time taken
+        t1 = time.time()
+        times.append(t1 - t0)
+
+        # ETA
+        avg_time = sum(times) / len(times)
+        remaining = total - idx
+        eta_sec = int(avg_time * remaining)
+
+        # Update UI
         progress.progress(int(idx / total * 100))
-        status_text.text(f"Scraping {idx}/{total} businesses...")
+        status_text.text(f"Scraping {idx}/{total} businesses... ⏳ ETA: {eta_sec}s")
 
     progress.empty()
-    status_text.success("✅ Scraping complete!")
+    total_time = int(time.time() - start_time)
+    status_text.success(f"✅ Scraping complete in {total_time}s!")
+
     return pd.DataFrame(rows)
 
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
@@ -230,5 +254,6 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
