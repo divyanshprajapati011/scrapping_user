@@ -112,8 +112,10 @@ def fetch_email_phone_from_site(url, timeout=12):
         return "", ""
 
 # ================== SCRAPER FUNCTION ==================
-def scrape_maps(url, limit=100, email_lookup=True):
+def scrape_maps(url, limit=200, email_lookup=True):
     rows = []
+    seen = set()   # duplicate prevention (name+website)
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -121,11 +123,23 @@ def scrape_maps(url, limit=100, email_lookup=True):
         )
         context = browser.new_context()
         page = context.new_page()
-        page.goto(url, timeout=60_000)
-        time.sleep(4)
+
+        # ✅ Increase timeout & wait properly
+        page.goto(url, timeout=120_000, wait_until="networkidle")
+        time.sleep(5)
+
+        # ✅ Keep scrolling until enough results loaded
+        last_height = 0
+        while len(page.locator("//div[contains(@class,'Nv2PK')]").all()) < limit:
+            page.mouse.wheel(0, 2000)
+            page.wait_for_timeout(2000)
+            new_height = page.evaluate("document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
 
         cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
-        count, last_name = 0, None
+        count = 0
 
         for card in cards:
             if limit and count >= limit:
@@ -133,63 +147,67 @@ def scrape_maps(url, limit=100, email_lookup=True):
             try:
                 card.scroll_into_view_if_needed()
                 card.click()
-                page.wait_for_timeout(1400)
+                page.wait_for_timeout(1500)
             except Exception:
                 continue
 
+            # Business Name
             try:
-                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=3000)
+                name = page.locator('//h1[contains(@class,"DUwDvf")]').inner_text(timeout=4000)
             except Exception:
                 continue
-            if name == last_name:
-                continue
-            last_name = name
 
+            # Website, Address, Phone, Rating, Reviews
             website, address, phone, rating, reviews = "", "", "", "", ""
             try:
                 if page.locator('//a[@data-item-id="authority"]').count():
-                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=1000) or ""
+                    website = page.locator('//a[@data-item-id="authority"]').get_attribute("href", timeout=2000) or ""
                 if page.locator('//button[@data-item-id="address"]').count():
-                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=1000)
+                    address = page.locator('//button[@data-item-id="address"]').inner_text(timeout=2000)
                 if page.locator('//button[starts-with(@data-item-id,"phone:")]').count():
-                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=1000)
+                    phone = page.locator('//button[starts-with(@data-item-id,"phone:")]').inner_text(timeout=2000)
 
-                # ⭐ Rating
                 el = page.locator('//span[@role="img" and contains(@aria-label,"stars")]')
                 if el.count():
-                    aria = el.get_attribute("aria-label", timeout=1000) or ""
+                    aria = el.get_attribute("aria-label", timeout=2000) or ""
                     r1 = re.search(r"(\d+(?:\.\d+)?)", aria)
                     rating = r1.group(1) if r1 else ""
 
-                # 📝 Review count
                 rev_el = page.locator('//span[contains(text(),"review")]')
                 if rev_el.count():
-                    txt = rev_el.nth(0).inner_text(timeout=1000)
+                    txt = rev_el.nth(0).inner_text(timeout=2000)
                     r2 = re.search(r"(\d[\d,]*)", txt)
                     reviews = r2.group(1).replace(",", "") if r2 else ""
             except Exception:
                 pass
 
+            # ✅ Check duplicate (name+website)
+            key = (name.strip(), website.strip())
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # Email & Extra Phones from website
             email_from_site, extra_phones_from_site = ("", "")
             if email_lookup and website:
                 email_from_site, extra_phones_from_site = fetch_email_phone_from_site(website)
 
             rows.append({
                 "Business Name": name,
-                "Website": website,
                 "Address": address,
-                "Phone (Maps)": phone,
+                "Website": website,
                 "Email (from site)": email_from_site,
-                "Extra Phones (from site)": extra_phones_from_site,
+                "Mobile": phone if phone else extra_phones_from_site,
                 "Rating": rating,
                 "Review Count": reviews,
-                "Source (Maps URL)": page.url
             })
             count += 1
 
         context.close()
         browser.close()
+
     return pd.DataFrame(rows)
+
 
 
 # ================== DOWNLOAD HELPERS ==================
@@ -320,6 +338,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
