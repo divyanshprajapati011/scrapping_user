@@ -112,7 +112,7 @@ def fetch_email_phone_from_site(url, timeout=12):
         return "", ""
 
 # ================== SCRAPER FUNCTION ==================
-def scrape_maps(url, limit=200, email_lookup=True):
+def scrape_maps(url, limit=100, email_lookup=True):
     rows = []
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -165,7 +165,7 @@ def scrape_maps(url, limit=200, email_lookup=True):
             last_height = new_height
 
             cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
-            if len(cards) >= limit or stagnant >= 8:
+            if len(cards) >= limit or stagnant >= 3:
                 break
 
         cards = page.locator("//div[contains(@class,'Nv2PK')]").all()
@@ -377,6 +377,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
