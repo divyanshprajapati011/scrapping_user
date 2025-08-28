@@ -82,7 +82,7 @@ def extract_email_phone(website_url):
 
 
 def scrape_maps(query, limit=50, lookup=True):
-    """SerpAPI से Google Maps scraping + Pagination + Progress + ETA"""
+    """SerpAPI से Google Maps scraping + Pagination + Progress + ETA + Auto-stop"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -106,7 +106,8 @@ def scrape_maps(query, limit=50, lookup=True):
 
         local_results = data.get("local_results", [])
         if not local_results:
-            break  # कोई और data नहीं मिला
+            st.warning(f"⚠️ Only {fetched} results found for this query. No more data available.")
+            break  # और data नहीं है
 
         for idx, r in enumerate(local_results, start=1):
             if fetched >= limit:
@@ -148,12 +149,13 @@ def scrape_maps(query, limit=50, lookup=True):
         # Pagination (अगर next page है तो)
         next_page_token = data.get("serpapi_pagination", {}).get("next_page_token")
         if not next_page_token:
-            break  # और pages नहीं मिले
+            st.info(f"ℹ️ Stopped early: Only {fetched} results available in Google Maps.")
+            break
 
         params["next_page_token"] = next_page_token
         page += 1
 
-        # ⏳ Wait before next call (SerpAPI docs suggest ~2s)
+        # ⏳ Wait before next call
         time.sleep(2)
 
     progress.empty()
@@ -161,6 +163,7 @@ def scrape_maps(query, limit=50, lookup=True):
     status_text.success(f"✅ Scraping complete in {total_time}s! (Got {len(rows)} results)")
 
     return pd.DataFrame(rows)
+
 
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
@@ -275,6 +278,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
