@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import hashlib, io, requests, re
-import time
+import hashlib, io, requests, re, time
 
 # ================== APP CONFIG ==================
-st.set_page_config(page_title="Maps Scraper )", layout="wide")
+st.set_page_config(page_title="Maps Scraper 🚀", layout="wide")
 
 # ================== SESSION ROUTER ==================
 if "page" not in st.session_state:
@@ -61,7 +60,7 @@ def login_user(username, password):
     return user
 
 # ================== SCRAPER (SERPAPI + EMAIL LOOKUP) ==================
-SERPAPI_KEY = "ea60d7830fc08072d9ab7f9109e10f1150c042719c20e7d8d9b9c6a25e3afe09"   # <<<<<<=== यहाँ अपनी key डालो
+SERPAPI_KEY = "ea60d7830fc08072d9ab7f9109e10f1150c042719c20e7d8d9b9c6a25e3afe09"
 
 EMAIL_REGEX = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
 PHONE_REGEX = r"\+?\d[\d\-\(\) ]{8,}\d"
@@ -106,7 +105,7 @@ def scrape_maps(query, limit=50, lookup=True):
 
         local_results = data.get("local_results", [])
         if not local_results:
-            break  # कोई result नहीं मिला
+            break  # no more results
 
         for r in local_results:
             if fetched >= limit:
@@ -149,9 +148,9 @@ def scrape_maps(query, limit=50, lookup=True):
         if not next_url or fetched >= limit:
             break
 
-        time.sleep(2)  # अगले पेज के लिए थोड़ा delay ज़रूरी है
+        time.sleep(2)  # delay for next page
         url = next_url
-        params = {}  # next_url में सब params पहले से होते हैं
+        params = {}  # next_url already has params
         page += 1
 
     progress.empty()
@@ -160,12 +159,6 @@ def scrape_maps(query, limit=50, lookup=True):
 
     return pd.DataFrame(rows)
 
-
-
-
-
-
-# ===============================================================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -279,4 +272,3 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
-
