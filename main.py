@@ -82,7 +82,7 @@ def extract_email_phone(website_url):
 
 
 def scrape_maps(query, limit=50, lookup=True):
-    """SerpAPI से Google Maps scraping + Proper Pagination + Retry"""
+    """SerpAPI से Google Maps scraping + Pagination Fix"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_maps",
@@ -106,7 +106,7 @@ def scrape_maps(query, limit=50, lookup=True):
 
         local_results = data.get("local_results", [])
         if not local_results:
-            break  # no more results
+            break  # कोई result नहीं मिला
 
         for r in local_results:
             if fetched >= limit:
@@ -144,30 +144,14 @@ def scrape_maps(query, limit=50, lookup=True):
                 f"Scraping {fetched}/{limit} businesses (Page {page})... ⏳ ETA: {eta_sec}s"
             )
 
-        # Pagination handling
-        next_page_token = data.get("serpapi_pagination", {}).get("next_page_token")
-        if not next_page_token or fetched >= limit:
+        # Pagination handling via "next"
+        next_url = data.get("serpapi_pagination", {}).get("next")
+        if not next_url or fetched >= limit:
             break
 
-        # 👉 wait + retry until token works
-        success = False
-        for _ in range(10):  # max 10 retries
-            time.sleep(5)  # token needs ~5s
-            params = {
-                "engine": "google_maps",
-                "type": "search",
-                "api_key": SERPAPI_KEY,
-                "next_page_token": next_page_token
-            }
-            res = requests.get(url, params=params)
-            data = res.json()
-            if data.get("local_results"):
-                success = True
-                break
-        if not success:
-            st.warning("⚠ Could not fetch next page, stopping early.")
-            break
-
+        time.sleep(2)  # अगले पेज के लिए थोड़ा delay ज़रूरी है
+        url = next_url
+        params = {}  # next_url में सब params पहले से होते हैं
         page += 1
 
     progress.empty()
@@ -176,6 +160,12 @@ def scrape_maps(query, limit=50, lookup=True):
 
     return pd.DataFrame(rows)
 
+
+
+
+
+
+# ===============================================================
 def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -289,3 +279,4 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
