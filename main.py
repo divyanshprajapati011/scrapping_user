@@ -239,8 +239,8 @@ def page_scraper():
                 user_id = st.session_state.user["user_id"]
                 log_search_activity(user_id, query)  # ✅ search save
                 df = scrape_maps(query, int(max_results), lookup=do_lookup)
-                log_scraping_results(user_id, df)  # ✅ results save
-
+                # log_scraping_results(user_id, df)  # ✅ results save
+                
                 st.success(f"✅ Found {len(df)} results."); st.dataframe(df, use_container_width=True)
                 st.download_button("⬇ Download CSV", data=df.to_csv(index=False).encode("utf-8-sig"),
                                    file_name="maps_scrape.csv", mime="text/csv")
@@ -266,6 +266,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
