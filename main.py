@@ -72,26 +72,26 @@ def log_search_activity(user_id, query):
     db.commit()
     cur.close(); db.close()
 
-def log_scraping_results(user_id, df: pd.DataFrame):
-    """scraped results को save करो"""
-    db = get_connection()
-    cur = db.cursor()
-    for _, row in df.iterrows():
-        cur.execute("""
-            INSERT INTO scraping_results 
-            (user_id, business_name, address, phone, email, website, rating)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            user_id,
-            row.get("Business Name"),
-            row.get("Address"),
-            row.get("Phone (Maps)") or row.get("Phone (Website)"),
-            row.get("Email (Website)"),
-            row.get("Website"),
-            row.get("Rating"),
-        ))
-    db.commit()
-    cur.close(); db.close()
+# def log_scraping_results(user_id, df: pd.DataFrame):
+#     """scraped results को save करो"""
+#     db = get_connection()
+#     cur = db.cursor()
+#     for _, row in df.iterrows():
+#         cur.execute("""
+#             INSERT INTO scraping_results 
+#             (user_id, business_name, address, phone, email, website, rating)
+#             VALUES (%s,%s,%s,%s,%s,%s,%s)
+#         """, (
+#             user_id,
+#             row.get("Business Name"),
+#             row.get("Address"),
+#             row.get("Phone (Maps)") or row.get("Phone (Website)"),
+#             row.get("Email (Website)"),
+#             row.get("Website"),
+#             row.get("Rating"),
+#         ))
+#     db.commit()
+#     cur.close(); db.close()
 
 def login_user(username, password):
     db = get_connection()
@@ -173,7 +173,6 @@ def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
         df.to_excel(writer, index=False, sheet_name="Sheet1")
     buf.seek(0)
     return buf.getvalue()
-
 # ================== TOPBAR ==================
 def topbar():
     cols = st.columns([1, 3])
@@ -264,6 +263,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
