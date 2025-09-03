@@ -39,7 +39,7 @@ def register_user(username, password, mobile, email):
     try:
         cur.execute(
             "INSERT INTO users (username, password, email, mobile_number) VALUES (%s,%s,%s,%s)",
-            (username, hash_password(password), email, mobile_number),
+            (username, hash_password(password), email, mobile),
         )
         db.commit()
         return True
@@ -266,6 +266,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
