@@ -192,10 +192,10 @@ def page_home():
     with c2:
         if st.button("📝 Signup", use_container_width=True):
             go_to("signup")
-    if st.session_state.logged_in:
-        st.success("✅ You are logged in")
-        if st.button("➡ Open Scraper", use_container_width=True):
-            go_to("scraper")
+    # if st.session_state.logged_in:
+    #     st.success("✅ You are logged in")
+    #     if st.button("➡ Open Scraper", use_container_width=True):
+    #         go_to("scraper")
 
 def page_login():
     st.title("Login 🔑")
@@ -225,7 +225,7 @@ def page_signup():
                 st.error("❌ User already exists or DB error.")
         else:
             st.warning("⚠ Please fill all fields.")
-    st.button("⬅ Back", on_click=lambda: go_to("home"))
+    st.button("⬅ Back", on_click=lambda: go_to("login"))
 
 def page_scraper():
     if not st.session_state.logged_in or not st.session_state.user:
@@ -271,4 +271,5 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
