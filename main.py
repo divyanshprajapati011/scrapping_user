@@ -203,8 +203,8 @@ def page_login():
         if user:
             st.session_state.logged_in, st.session_state.user = True, user
             log_login_activity(user["user_id"])  # ✅ login activity save
-            st.success("✅ Login successful! Redirecting...")
-            go_to("scraper")
+            st.success("✅ Login successful .... ")
+            st.button("Go Scrapper Tool ", on_click=lambda: go_to("scraper"))
         else:
             st.error("❌ Invalid credentials")
 
@@ -218,7 +218,7 @@ def page_signup():
                 st.success("Signup successful! Please login now."); go_to("login")
             else: st.error("❌ User already exists or DB error.")
         else: st.warning("⚠ Please fill all fields.")
-    st.button("⬅ Back", on_click=lambda: go_to("login"))
+    st.button("login ", on_click=lambda: go_to("login"))
 
 def page_scraper():
     if not st.session_state.logged_in or not st.session_state.user:
@@ -256,14 +256,15 @@ if page == "home":
     page_home()
 elif page == "login":
     page_login()
-    page_scraper()
+    # page_scraper()
 elif page == "signup":
     page_signup()
-    page_login()
+    # page_login()
 elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
