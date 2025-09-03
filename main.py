@@ -38,8 +38,8 @@ def register_user(username, password, mobile, email):
     cur = db.cursor()
     try:
         cur.execute(
-            "INSERT INTO users (username, password, mobile, email) VALUES (%s,%s,%s)",
-            (username, hash_password(password), email),
+            "INSERT INTO users (username, passwordr, email, mobile_numbe) VALUES (%s,%s,%s)",
+            (username, hash_password(password), email, mobile_number),
         )
         db.commit()
         return True
@@ -266,6 +266,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
