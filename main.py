@@ -265,11 +265,14 @@ if page == "home":
     page_home()
 elif page == "login":
     page_login()
+    page_scraper()
 elif page == "signup":
     page_signup()
+    page_login()
 elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
