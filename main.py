@@ -21,10 +21,10 @@ def go_to(p):
 # ================== DB ==================
 def get_connection():
     return psycopg2.connect(
-        user="postgres.jsjlthhnrtwjcyxowpza",
+        user="postgres.fpkyghloouywbxbdmqlp",
         password="@Deep7067",
         host="aws-1-ap-south-1.pooler.supabase.com",
-        port="6543",
+        port="5432",
         dbname="postgres",
         sslmode="require",
     )
@@ -272,3 +272,4 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
