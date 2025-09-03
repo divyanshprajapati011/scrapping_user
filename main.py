@@ -215,8 +215,8 @@ def page_signup():
     new_pass = st.text_input("Choose Password", type="password")
     
     if st.button("Create Account"):
-        if new_user and new_email and new_pass:
-            if register_user(new_user, new_pass, new_email):
+        if new_user and new_email and new_mob and new_pass:
+            if register_user(new_user, new_pass , new_mob, new_email):
                 st.success("Signup successful! Please login now."); go_to("login")
             else: st.error("❌ User already exists or DB error.")
         else: st.warning("⚠ Please fill all fields.")
@@ -266,6 +266,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
