@@ -210,7 +210,6 @@ def page_login():
             go_to("scraper")
         else:
             st.error("❌ Invalid credentials")
-    st.button("⬅ Back", on_click=lambda: go_to("home"))
 
 def page_signup():
     st.title("Signup 📝")
@@ -272,3 +271,4 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
