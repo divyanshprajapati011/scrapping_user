@@ -33,12 +33,12 @@ def get_connection():
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-def register_user(username, password, email):
+def register_user(username, password, mobile, email):
     db = get_connection()
     cur = db.cursor()
     try:
         cur.execute(
-            "INSERT INTO users (username, password, email) VALUES (%s,%s,%s)",
+            "INSERT INTO users (username, password, mobile, email) VALUES (%s,%s,%s)",
             (username, hash_password(password), email),
         )
         db.commit()
@@ -209,8 +209,11 @@ def page_login():
 
 def page_signup():
     st.title("Signup 📝")
-    new_user = st.text_input("Choose Username"); new_email = st.text_input("Email")
+    new_user = st.text_input("Choose Username")
+    new_email = st.text_input("Email")
+    new_mob = st.text_input("Enter your Number ")
     new_pass = st.text_input("Choose Password", type="password")
+    
     if st.button("Create Account"):
         if new_user and new_email and new_pass:
             if register_user(new_user, new_pass, new_email):
@@ -263,6 +266,7 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
 
 
 
