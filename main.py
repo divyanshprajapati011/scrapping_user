@@ -265,7 +265,9 @@ elif page == "signup":
 elif page == "scraper":
     page_scraper()
 else:
-    page_home()
+    # page_home()
+    page_scraper()
+
 
 
 
