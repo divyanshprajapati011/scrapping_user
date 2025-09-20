@@ -8,15 +8,15 @@ import hashlib, io, requests, re, time, socket
 st.set_page_config(page_title="Maps Scraper 🚀", layout="wide")
 
 # ================== SESSION ROUTER ==================
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "user" not in st.session_state:
-    st.session_state.user = None
+# if "page" not in st.session_state:
+#     st.session_state.page = "home"
+# if "logged_in" not in st.session_state:
+#     st.session_state.logged_in = False
+# if "user" not in st.session_state:
+#     st.session_state.user = None
 
-def go_to(p):
-    st.session_state.page = p
+# def go_to(p):
+#     st.session_state.page = p
 
 # ================== DB ==================
 def get_connection():
@@ -269,7 +269,9 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
+
     
+
 
 
 
