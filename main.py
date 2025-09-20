@@ -8,15 +8,15 @@ import hashlib, io, requests, re, time, socket
 st.set_page_config(page_title="Maps Scraper 🚀", layout="wide")
 
 # ================== SESSION ROUTER ==================
-# if "page" not in st.session_state:
-#     st.session_state.page = "home"
-# if "logged_in" not in st.session_state:
-#     st.session_state.logged_in = False
-# if "user" not in st.session_state:
-#     st.session_state.user = None
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user" not in st.session_state:
+    st.session_state.user = None
 
-# def go_to(p):
-#     st.session_state.page = p
+def go_to(p):
+    st.session_state.page = p
 
 # ================== DB ==================
 def get_connection():
@@ -181,21 +181,18 @@ def topbar():
     with cols[1]:
         if st.session_state.logged_in and st.session_state.user:
             u = st.session_state.user["username"]
-            st.info(f"Logged in as *{u}*")
+            st.info(f"Logged in as {u}")
             if st.button("🚪 Logout"):
                 st.session_state.logged_in = False; st.session_state.user = None; go_to("home")
 
 # ================== PAGES ==================
 def page_home():
     st.title("Welcome to Maps Scraper 🚀")
-    c1, c2 , c3= st.columns(2)
+    c1, c2 = st.columns(2)
     with c1:
         if st.button("🔑 Login", use_container_width=True): go_to("login")
     with c2:
         if st.button("📝 Signup", use_container_width=True): go_to("signup")
-
-    with c3:
-        if st.button("📝 scraper", use_container_width=True): go_to("scraper")
 
 def page_login():
     st.title("Login 🔑")
@@ -226,10 +223,10 @@ def page_signup():
     st.button("login ", on_click=lambda: go_to("login"))
 
 def page_scraper():
-    # if not st.session_state.logged_in or not st.session_state.user:
-    #     st.error("⚠ Please login first"); 
-    #     if st.button("Go to Login"): go_to("login")
-    #     return
+    if not st.session_state.logged_in or not st.session_state.user:
+        st.error("⚠ Please login first"); 
+        if st.button("Go to Login"): go_to("login")
+        return
 
     st.title("🚀 Google Maps Scraper ")
     query = st.text_input("🔎 Enter your query", "top coaching in Bhopal")
@@ -269,28 +266,3 @@ elif page == "scraper":
     page_scraper()
 else:
     page_home()
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
