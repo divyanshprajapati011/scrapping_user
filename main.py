@@ -223,10 +223,10 @@ def page_signup():
     st.button("login ", on_click=lambda: go_to("login"))
 
 def page_scraper():
-    if not st.session_state.logged_in or not st.session_state.user:
-        st.error("⚠ Please login first"); 
-        if st.button("Go to Login"): go_to("login")
-        return
+    # if not st.session_state.logged_in or not st.session_state.user:
+    #     st.error("⚠ Please login first"); 
+    #     if st.button("Go to Login"): go_to("login")
+    #     return
 
     st.title("🚀 Google Maps Scraper ")
     query = st.text_input("🔎 Enter your query", "top coaching in Bhopal")
@@ -265,8 +265,8 @@ elif page == "signup":
 elif page == "scraper":
     page_scraper()
 else:
-    # page_home()
-    page_scraper()
+    page_home()
+    
 
 
 
