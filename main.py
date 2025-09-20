@@ -188,11 +188,14 @@ def topbar():
 # ================== PAGES ==================
 def page_home():
     st.title("Welcome to Maps Scraper 🚀")
-    c1, c2 = st.columns(2)
+    c1, c2 , c3= st.columns(2)
     with c1:
         if st.button("🔑 Login", use_container_width=True): go_to("login")
     with c2:
         if st.button("📝 Signup", use_container_width=True): go_to("signup")
+
+    with c3:
+        if st.button("📝 scraper", use_container_width=True): go_to("scraper")
 
 def page_login():
     st.title("Login 🔑")
@@ -267,6 +270,7 @@ elif page == "scraper":
 else:
     page_home()
     
+
 
 
 
