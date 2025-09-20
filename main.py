@@ -5,7 +5,7 @@ from psycopg2.extras import RealDictCursor
 import hashlib, io, requests, re, time, socket
 
 # ================== APP CONFIG ==================
-st.set_page_config(page_title="Maps Scraper 🚀", layout="wide")
+st.set_page_config(page_title="Maps Scraper ", layout="wide")
 
 # ================== SESSION ROUTER ==================
 if "page" not in st.session_state:
@@ -267,6 +267,7 @@ elif page == "scraper":
 else:
     page_home()
     
+
 
 
 
